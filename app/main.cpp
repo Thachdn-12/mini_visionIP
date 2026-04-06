@@ -7,7 +7,9 @@
 #include "../module_input/input.h"
 #include "../module_isp/isp.h"
 #include "../module_ufm/ufm.h"
+#include "../module_ufm/ufm_types.h"
 #include "../utils/config.h"
+#include "../utils/flow_vis.h"
 
 #define NOW std::chrono::high_resolution_clock::now()
 #define MS(t) std::chrono::duration<double, std::milli>(t).count()
@@ -29,7 +31,7 @@ int main()
     // UFM config
     ufm_config ufm_cfg;
 
-    ufm_cfg.use_roi = true;
+    ufm_cfg.use_roi = false;
     ufm_cfg.roi = cv::Rect(100, 100, 200, 200);
     ufm_cfg.use_downsample = true;
     ufm_cfg.scale = 0.5f;
@@ -73,10 +75,69 @@ int main()
         cv::cvtColor(isp_mat, isp_bgr, cv::COLOR_GRAY2BGR);
         
         ufm.process(isp_bgr);
+        auto ufm_out = ufm.getOutput();
+        auto ufm_flow = ufm_out.flow;
+        auto curr = ufm_out.curr_gray;
+        auto prev = ufm_out.prev_gray;
+        auto offset = ufm_out.roi_offset;
         auto flow = ufm.getFlow();
         
-        auto t4 = NOW;
+        
 
+            if (!flow.empty()) {
+
+                // convert ISP output to BGR to draw
+                cv::Mat vis;
+                cv::cvtColor(isp_mat, vis, cv::COLOR_GRAY2BGR);
+                float scale = ufm_cfg.use_downsample ? 1.0f / ufm_cfg.scale : 1.0f;
+                cv::Point offset(0, 0);
+                if (ufm_cfg.use_roi) {
+
+               float scale = ufm_cfg.use_downsample ? 1.0f / ufm_cfg.scale : 1.0f;
+
+               cv::Point offset = ufm.getRoiOffset();
+
+               int x1 = offset.x * scale;
+               int y1 = offset.y * scale;
+
+               int x2 = (offset.x + flow.cols) * scale;
+               int y2 = (offset.y + flow.rows) * scale;
+
+               cv::rectangle(
+                   vis,
+                   cv::Point(x1, y1),
+                   cv::Point(x2, y2),
+                   cv::Scalar(0, 0, 255), // đỏ
+                   2
+               );
+            }
+            int h = flow.rows;
+            int w = flow.cols;
+
+            for (int y = 0; y < h; y += 5) {
+                for (int x = 0; x < w; x += 10) {
+
+                    cv::Point2f f = flow.at<cv::Point2f>(y, x);
+                    // scale back to full frame
+                    int gx = (x + offset.x) * scale;
+                    int gy = (y + offset.y) * scale;
+
+                    int dx = f.x * scale;
+                    int dy = f.y * scale;
+
+                    cv::arrowedLine(
+                        vis,
+                        cv::Point(gx, gy),
+                        cv::Point(gx + dx, gy + dy),
+                        cv::Scalar(0,255,0),
+                        1
+                    );
+                }
+            }
+
+            cv::imshow("Flow Arrows", vis);
+        }
+        auto t4 = NOW;
         // ===== FPS =====
         double total_dt = std::chrono::duration<double>(t2 - prev_time).count();
         prev_time = t2;
