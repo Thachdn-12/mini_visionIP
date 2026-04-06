@@ -11,10 +11,8 @@ OpticalFlowUFM::OpticalFlowUFM(const ufm_config& cfg) {
  *  Stage 1 – Preprocess
  */
 void OpticalFlowUFM::preprocess(const cv::Mat& frame) {
-    frame_curr = frame.clone();
-
     // convert to grayscale
-    cv::cvtColor(frame_curr, gray_curr, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(frame, gray_curr, cv::COLOR_BGR2GRAY);
 
     // Downsample
     if(config.use_downsample) {
@@ -45,10 +43,15 @@ void OpticalFlowUFM::preprocess(const cv::Mat& frame) {
     if (config.use_blur) {
         cv::GaussianBlur(gray_curr, gray_curr, cv::Size(5,5), 0);
     }
+
+    output.curr_gray = gray_curr;
+    output.roi = roi;
+    output.roi_offset = roi_offset;
 }
 
 /**
  *  Stage 2 – Compute Flow
+ *  Dense Optical Flow - Farneback
  */
 void OpticalFlowUFM::computeFlow() {
     cv::calcOpticalFlowFarneback(
@@ -70,7 +73,10 @@ void OpticalFlowUFM::computeFlow() {
  */
 void OpticalFlowUFM::postprocess() {
     // filter noise: threshold magnitude
-    flow_filtered = flow_raw.clone();
+    if (flow_filtered.empty())
+        flow_filtered = flow_raw.clone();
+    else
+        flow_raw.copyTo(flow_filtered);
 
     for (int y = 0; y < flow_filtered.rows; y++) {
         for (int x = 0; x < flow_filtered.cols; x++) {
@@ -78,12 +84,15 @@ void OpticalFlowUFM::postprocess() {
 
             float mag = std::sqrt(f[0]*f[0] + f[1]*f[1]);
 
-            if (mag < 1.0f) { // threshold
+            if (mag < config.flow_threshold) { // threshold
                 f[0] = 0;
                 f[1] = 0;
             }
         }
     }
+
+    output.flow = flow_filtered;
+    output.prev_gray = gray_prev;
 }
 
 void OpticalFlowUFM::process(const cv::Mat& frame) {
@@ -102,9 +111,16 @@ void OpticalFlowUFM::process(const cv::Mat& frame) {
     gray_prev = gray_curr.clone();
 }
 
+cv::Point OpticalFlowUFM::getRoiOffset() const {
+    return roi_offset;
+}
 /**
  *  Output getter
  */
 const cv::Mat& OpticalFlowUFM::getFlow() const {
     return flow_filtered;
+}
+
+const ufm_output_t& OpticalFlowUFM::getOutput() const {
+    return output;
 }
