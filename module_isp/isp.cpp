@@ -2,9 +2,11 @@
 #include <opencv2/opencv.hpp>
 
 static cv::Mat gray, blur_img, resized;
+static isp_config_t config;
 
-bool isp_init()
+bool isp_init(const isp_config_t& cfg)
 {
+    config = cfg;
     return true;
 }
 
@@ -20,8 +22,11 @@ bool isp_process(frame_t &in, frame_t &out)
     else
         gray = input;
 
-    // 2. Noise reduction
-    cv::GaussianBlur(gray, blur_img, cv::Size(5,5), 0);
+    // 2. Blur (config control) Noise reduction
+    if (config.enable_blur)
+        cv::GaussianBlur(gray, blur_img, cv::Size(5,5), 0);
+    else
+        blur_img = gray;
 
     // 3. Resize
     cv::resize(blur_img, resized, cv::Size(640, 480));
@@ -36,6 +41,6 @@ bool isp_process(frame_t &in, frame_t &out)
     return true;
 }
 
-void isp_release()
-{
+void isp_release(){
+
 }
