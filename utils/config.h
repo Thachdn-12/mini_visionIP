@@ -24,4 +24,11 @@ struct ufm_config {
     bool use_blur = true;
 };
 
+struct SMDPSConfig {
+    float thresh_mag = 2.0f;
+    int radius = 2;
+    float sigma_s = 5.0f;
+    float sigma_c = 10.0f;
+};
+
 #endif
